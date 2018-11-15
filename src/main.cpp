@@ -140,7 +140,7 @@ int main()
             weights[4] = 0.0;
             filterCTE = average(cteBuffer, weights);
             std::cout << "CTE = " << cte << "Filtered = " << filterCTE << std::endl;
-            pid_steering.UpdateError(cte);
+            pid_steering.UpdateError(filterCTE);
             steer_value = pid_steering.TotalError();
           }
           
