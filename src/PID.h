@@ -1,6 +1,8 @@
 #ifndef PID_H
 #define PID_H
 
+enum TwiddleState {update, check1, check2};
+
 class PID {
 public:
   /*
@@ -16,6 +18,14 @@ public:
   double Kp;
   double Ki;
   double Kd;
+
+  double bestError;
+  double dp[3];
+  int TwiddleParam;
+
+  TwiddleState Tstate;
+
+
 
   /*
   * Constructor
@@ -41,6 +51,10 @@ public:
   * Calculate the total PID error.
   */
   double TotalError();
+
+  void UpdateAndTwiddle(double cte, double tol);
+
+  void setBestError(double best);
 };
 
 #endif /* PID_H */
