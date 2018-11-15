@@ -4,10 +4,26 @@
 #include "PID.h"
 #include <math.h>
 
-void addToBuffer(double cte, double* buffer)
+void addToBuffer(double cte, double (&buffer)[5])
 {
-  
+  for(int i = 0; i < 4; i++)
+  {
+    buffer[i+1] = buffer[i];
+  }
+  buffer[0] = cte;
 }
+
+double average(double buffer[5], double weights[5])
+{
+  double total = 0;
+  for(int i = 0; i < 5; i++)
+  {
+    //std::cout << "buffer[i] = " << buffer[i] << "weights[i] = " << weights[i] << std::endl;
+    total += (buffer[i] * weights[i]);
+  }
+  return (total);
+}
+
 // for convenience
 using json = nlohmann::json;
 
@@ -44,8 +60,13 @@ int main()
   double sumSteering = 0;
   int i = 0;
   bool firstTime = true;
+  double cteBuffer[5];
+  for(int i = 0; i < 5; i++)
+  {
+    cteBuffer[i] = 0;
+  }
 
-  h.onMessage([&pid_steering, &pid_speed, &sumSteering, &i, &firstTime](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid_steering, &pid_speed, &sumSteering, &i, &firstTime, &cteBuffer](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -62,6 +83,7 @@ int main()
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
           double throttle_value;
+          double filterCTE;
 
           pid_speed.UpdateError(speed - 20);
           throttle_value = pid_speed.TotalError();
@@ -75,6 +97,17 @@ int main()
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
+          if(i == 0)
+          {
+            for(int j = 0; j < 5; j++)
+            {
+              cteBuffer[j] = cte;
+            }
+          }
+          else
+          {
+            addToBuffer(cte, cteBuffer);
+          }
           i++;
           if(i>400){
             std::cout << "Average cte = " << sumSteering/i << std::endl;
@@ -89,18 +122,33 @@ int main()
             sumSteering = 0;
             steer_value = 0;
             throttle_value = 0;
+            for(int i = 0; i < 5; i++)
+            {
+              cteBuffer[i] = 0;
+            }
             std::string reset_msg = "42[\"reset\",{}]";
             ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
           }
           else
           {
             sumSteering += fabs(cte);
+            double weights[5];
+            weights[0] = 0.8;
+            weights[1] = 0.1;
+            weights[2] = 0.05;
+            weights[3] = 0.05;
+            weights[4] = 0.0;
+            filterCTE = average(cteBuffer, weights);
+            std::cout << "CTE = " << cte << "Filtered = " << filterCTE << std::endl;
             pid_steering.UpdateError(cte);
             steer_value = pid_steering.TotalError();
           }
           
           // DEBUG
           //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+
+          //Filter Output Steering
+          //steer_value = ((exp(steer_value)/(1 + exp(steer_value))) - 0.5) * 2;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
