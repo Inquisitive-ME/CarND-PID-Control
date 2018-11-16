@@ -21,6 +21,7 @@ public:
 
   double bestError;
   double dp[3];
+  double bestp[3];
   int TwiddleParam;
 
   TwiddleState Tstate;
@@ -50,11 +51,15 @@ public:
   /*
   * Calculate the total PID error.
   */
+  double TotalError(double speed);
+
   double TotalError();
 
-  void UpdateAndTwiddle(double cte, double tol);
+  bool UpdateAndTwiddle(double cte, double tol);
 
-  void setBestError(double best);
+  void Reset(void);
+
+  double getBestError(void);
 };
 
 #endif /* PID_H */

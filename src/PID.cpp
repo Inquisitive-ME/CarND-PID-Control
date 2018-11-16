@@ -1,5 +1,6 @@
 #include "PID.h"
 #include <iostream>
+#include <math.h>
 using namespace std;
 
 /*
@@ -16,28 +17,40 @@ void PID::Init(double Kp, double Ki, double Kd) {
   this->Kd = Kd;
   p_error = 0;
 
-  dp[0] = .2;
+  dp[0] = .1;
   dp[1] = .00005;
   dp[2] = .2;
 
+  bestError = 999;
+
   TwiddleParam = 0;
   Tstate = update;
-  bestError = 9999;
 
 }
 
 void PID::UpdateError(double cte) {
-
   d_error = (cte - p_error);
   p_error = cte;
   i_error += cte;
 }
 
+void PID::Reset()
+{
+  d_error = 0;
+  p_error = 0;
+  i_error = 0;
+}
+
+double PID::TotalError(double speed) {
+  double p = (p_error*Kp)/(pow(2,sqrt(speed)));
+
+  return -(p + i_error*Ki + d_error*Kd);
+}
 double PID::TotalError() {
   return -(p_error*Kp + i_error*Ki + d_error*Kd);
 }
 
-void PID::UpdateAndTwiddle(double cte, double tol) {
+bool PID::UpdateAndTwiddle(double cte, double tol) {
   std::cout << "cte = " << cte << std::endl;
   double p[3] {Kp,Ki,Kd};
 
@@ -50,6 +63,8 @@ void PID::UpdateAndTwiddle(double cte, double tol) {
   {
     if(Tstate == update)
     {
+      // Only is update on first past
+      bestError = cte;
       p[TwiddleParam] += dp[TwiddleParam];
       Tstate = check1;
       std::cout << "UPDATE: Kp = " << p[0] << "Ki = " << p[1] << "Kd = " << p[2] << endl;
@@ -58,6 +73,9 @@ void PID::UpdateAndTwiddle(double cte, double tol) {
     {
       cout << "best error increase twiddle parameters" << cte << endl;
       bestError = cte;
+      bestp[0] = Kp;
+      bestp[1] = Ki;
+      bestp[2] = Kd;
       dp[TwiddleParam] *= 1.1;
       if(TwiddleParam==2)
       {
@@ -77,6 +95,7 @@ void PID::UpdateAndTwiddle(double cte, double tol) {
       std::cout << "Error worse than " << bestError << " parameter -2x" << std::endl;
       p[TwiddleParam] -= 2*dp[TwiddleParam];
       Tstate = check2;
+      std::cout << "UPDATE: Kp = " << p[0] << "Ki = " << p[1] << "Kd = " << p[2] << endl;
     }
     else if(Tstate == check2)
     {
@@ -97,19 +116,33 @@ void PID::UpdateAndTwiddle(double cte, double tol) {
       Tstate = check1;
       std::cout << "UPDATE: Kp = " << p[0] << "Ki = " << p[1] << "Kd = " << p[2] << endl;
     }
+    Kp = p[0];
+    Ki = p[1];
+    Kd = p[2];
+
+    d_error = (cte - p_error);
+    p_error = cte;
+    i_error += cte;
+    return false;
   }
+  else
+  {
+    std::cout << "Tolerance Reached: Kp = " << bestp[0] << "Ki = " << bestp[1] << "Kd = " << bestp[2] << endl;
+    Kp = bestp[0];
+    Ki = bestp[1];
+    Kd = bestp[2];
 
-  Kp = p[0];
-  Ki = p[1];
-  Kd = p[2];
+    d_error = (cte - p_error);
+    p_error = cte;
+    i_error += cte;
+    return  true;
 
-  d_error = (cte - p_error);
-  p_error = cte;
-  i_error += cte;
+  }
 }
 
-void PID::setBestError(double best)
+double PID::getBestError()
 {
-  bestError = best;
+  return bestError;
 }
+
 

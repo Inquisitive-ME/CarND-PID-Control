@@ -4,26 +4,6 @@
 #include "PID.h"
 #include <math.h>
 
-void addToBuffer(double cte, double (&buffer)[5])
-{
-  for(int i = 0; i < 4; i++)
-  {
-    buffer[i+1] = buffer[i];
-  }
-  buffer[0] = cte;
-}
-
-double average(double buffer[5], double weights[5])
-{
-  double total = 0;
-  for(int i = 0; i < 5; i++)
-  {
-    //std::cout << "buffer[i] = " << buffer[i] << "weights[i] = " << weights[i] << std::endl;
-    total += (buffer[i] * weights[i]);
-  }
-  return (total);
-}
-
 // for convenience
 using json = nlohmann::json;
 
@@ -55,18 +35,16 @@ int main()
   PID pid_speed;
   PID pid_steering;
   pid_speed.Init(.15,0.0008,0.3);
-  pid_steering.Init(.5,.0003,2);
+  pid_steering.Init(7.5,.0003,1);
+  // 30 mph Tolerance Reached: Kp = 0.24Ki = 0.00035217Kd = 1.40422
+  // 30 mph Kp adjusted for speed UPDATE: Kp = 7.55128Ki = 0.00030405Kd = 1.29895
   // TODO: Initialize the pid variable.
   double sumSteering = 0;
   int i = 0;
-  bool firstTime = true;
-  double cteBuffer[5];
-  for(int i = 0; i < 5; i++)
-  {
-    cteBuffer[i] = 0;
-  }
+  //Can set this to false to not have twiddle
+  bool stillTwiddling = true;
 
-  h.onMessage([&pid_steering, &pid_speed, &sumSteering, &i, &firstTime, &cteBuffer](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid_steering, &pid_speed, &sumSteering, &i, &stillTwiddling](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -83,9 +61,8 @@ int main()
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
           double throttle_value;
-          double filterCTE;
 
-          pid_speed.UpdateError(speed - 20);
+          pid_speed.UpdateError(speed - 40);
           throttle_value = pid_speed.TotalError();
          // std::cout << "speed p_error = " << pid_speed.p_error << " i_error = " << pid_speed.i_error << " d_error = " << pid_speed.d_error <<
          // " throttle = " << throttle_value << std::endl;
@@ -97,51 +74,48 @@ int main()
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-          if(i == 0)
-          {
-            for(int j = 0; j < 5; j++)
-            {
-              cteBuffer[j] = cte;
-            }
-          }
-          else
-          {
-            addToBuffer(cte, cteBuffer);
-          }
-          i++;
-          if(i>400){
+
+          if(i>800 && stillTwiddling){
             std::cout << "Average cte = " << sumSteering/i << std::endl;
-            if(firstTime)
-            {
-              // TODO move this into the twiddle function
-              pid_steering.setBestError(sumSteering/i);
-              firstTime = false;
-            }
-            pid_steering.UpdateAndTwiddle(sumSteering/i,0.01);
+            stillTwiddling = !(pid_steering.UpdateAndTwiddle(sumSteering/i,0.01));
             i=0;
             sumSteering = 0;
             steer_value = 0;
             throttle_value = 0;
-            for(int i = 0; i < 5; i++)
-            {
-              cteBuffer[i] = 0;
-            }
+            pid_steering.Reset();
+            pid_speed.Reset();
             std::string reset_msg = "42[\"reset\",{}]";
             ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
           }
+          else if(i>800 && ! stillTwiddling)
+          {
+            std::cout << "Average cte = " << sumSteering/i << std::endl;
+            i=0;
+            sumSteering = 0;
+            pid_steering.UpdateError(cte);
+            steer_value = pid_steering.TotalError(speed);
+          }
           else
           {
+            //TODO try to decrease twiddle time
+
+            if((i>50) && ((sumSteering/i) > (pid_steering.getBestError() * 2)))
+            {
+              stillTwiddling = !(pid_steering.UpdateAndTwiddle(sumSteering/i,0.01));
+              i=0;
+              sumSteering = 0;
+              steer_value = 0;
+              throttle_value = 0;
+              pid_steering.Reset();
+              pid_speed.Reset();
+              std::string reset_msg = "42[\"reset\",{}]";
+              ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+            }
+
             sumSteering += fabs(cte);
-            double weights[5];
-            weights[0] = 0.8;
-            weights[1] = 0.1;
-            weights[2] = 0.05;
-            weights[3] = 0.05;
-            weights[4] = 0.0;
-            filterCTE = average(cteBuffer, weights);
-            std::cout << "CTE = " << cte << "Filtered = " << filterCTE << std::endl;
-            pid_steering.UpdateError(filterCTE);
-            steer_value = pid_steering.TotalError();
+            pid_steering.UpdateError(cte);
+            steer_value = pid_steering.TotalError(speed);
+            i++;
           }
           
           // DEBUG
@@ -149,6 +123,9 @@ int main()
 
           //Filter Output Steering
           //steer_value = ((exp(steer_value)/(1 + exp(steer_value))) - 0.5) * 2;
+          steer_value = tanh(steer_value);
+          //steer_value = steer_value*steer_value*steer_value*3;
+          steer_value = fmax(fmin(1,steer_value),-1);
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
