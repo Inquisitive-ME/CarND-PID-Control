@@ -25,6 +25,7 @@ public:
   int TwiddleParam;
 
   TwiddleState Tstate;
+  bool i_reset;
 
 
 
@@ -41,7 +42,7 @@ public:
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void Init(double Kp, double Ki, double Kd, bool i_reset);
 
   /*
   * Update the PID error variables given cross track error.

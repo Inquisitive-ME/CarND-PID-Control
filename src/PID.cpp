@@ -3,35 +3,39 @@
 #include <math.h>
 using namespace std;
 
-/*
-* TODO: Complete the PID class.
-*/
-
 PID::PID() {}
 
 PID::~PID() {}
 
-void PID::Init(double Kp, double Ki, double Kd) {
+void PID::Init(double Kp, double Ki, double Kd, bool i_reset) {
   this->Kp = Kp;
   this->Ki = Ki;
   this->Kd = Kd;
   p_error = 0;
 
-  dp[0] = .1;
-  dp[1] = .00005;
+  dp[0] = .05;
+  dp[1] = .001;
   dp[2] = .2;
 
   bestError = 999;
 
   TwiddleParam = 0;
   Tstate = update;
+  this->i_reset = i_reset;
 
 }
 
 void PID::UpdateError(double cte) {
   d_error = (cte - p_error);
+  if((((cte < 0) && (p_error < 0)) || ((cte > 0) && (p_error > 0)) || !i_reset))
+  {
+    i_error += cte;
+  }
+  else
+  {
+    i_error = 0;
+  }
   p_error = cte;
-  i_error += cte;
 }
 
 void PID::Reset()

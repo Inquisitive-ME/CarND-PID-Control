@@ -34,15 +34,15 @@ int main()
 
   PID pid_speed;
   PID pid_steering;
-  pid_speed.Init(.15,0.0008,0.3);
-  pid_steering.Init(7.5,.0003,1);
-  // 30 mph Tolerance Reached: Kp = 0.24Ki = 0.00035217Kd = 1.40422
-  // 30 mph Kp adjusted for speed UPDATE: Kp = 7.55128Ki = 0.00030405Kd = 1.29895
-  // TODO: Initialize the pid variable.
+  pid_speed.Init(.15,0.0004,0.1, false);
+  pid_steering.Init(0.175,.004, 1.3, true);
+  /// From Twiddle Kp = 0.205 Ki = 0.00451727 Kd = 1.65984
+
+
   double sumSteering = 0;
   int i = 0;
-  //Can set this to false to not have twiddle
-  bool stillTwiddling = true;
+  // set this to false to not have twiddle
+  bool stillTwiddling = false;
 
   h.onMessage([&pid_steering, &pid_speed, &sumSteering, &i, &stillTwiddling](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -62,14 +62,13 @@ int main()
           double steer_value;
           double throttle_value;
 
-          pid_speed.UpdateError(speed - 40);
+          pid_speed.UpdateError(speed - 30);
           throttle_value = pid_speed.TotalError();
          // std::cout << "speed p_error = " << pid_speed.p_error << " i_error = " << pid_speed.i_error << " d_error = " << pid_speed.d_error <<
          // " throttle = " << throttle_value << std::endl;
 
 
           /*
-          * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
@@ -93,12 +92,10 @@ int main()
             i=0;
             sumSteering = 0;
             pid_steering.UpdateError(cte);
-            steer_value = pid_steering.TotalError(speed);
+            steer_value = pid_steering.TotalError();
           }
           else
           {
-            //TODO try to decrease twiddle time
-
             if((i>50) && ((sumSteering/i) > (pid_steering.getBestError() * 2)))
             {
               stillTwiddling = !(pid_steering.UpdateAndTwiddle(sumSteering/i,0.01));
@@ -114,7 +111,7 @@ int main()
 
             sumSteering += fabs(cte);
             pid_steering.UpdateError(cte);
-            steer_value = pid_steering.TotalError(speed);
+            steer_value = pid_steering.TotalError();
             i++;
           }
           
@@ -123,8 +120,10 @@ int main()
 
           //Filter Output Steering
           //steer_value = ((exp(steer_value)/(1 + exp(steer_value))) - 0.5) * 2;
-          steer_value = tanh(steer_value);
+          //steer_value = tanh(steer_value);
           //steer_value = steer_value*steer_value*steer_value*3;
+
+          // Set range to [-1, 1]
           steer_value = fmax(fmin(1,steer_value),-1);
 
           json msgJson;

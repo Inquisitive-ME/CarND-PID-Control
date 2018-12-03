@@ -37,62 +37,42 @@ There's an experimental patch for windows in this [PR](https://github.com/udacit
 
 Tips for setting up your environment can be found [here](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/23d376c7-0195-4276-bdf0-e02f1f3c665d)
 
-## Editor Settings
+## Effects of the P, I, D components of the PID algorithm
+The input to the PID controller is Cross Track Error (cte). This is the distance from the center of the vehicle
+to the expected location on the path, which in this case is the center of the lane.
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+### Proportional (P) Gain
+The proportional term is simply the cross track error times the proportional gain value P.
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+When tuning the controller I was surprised that the proportional term alone was not able to create a stable controller.
+With just a P controller the controller either could not steer enough on turns to keep the car on the road, or would
+become unstable after turns. In order to get a stable system that would at least be able to drive the entire track
+I had to include derivative gain. I think this is because the target of the controller is constantly changing as the
+vehicle is driving which the proportional gain cannot compensate for.
 
-## Code Style
+### Integral (I) Gain
+The integral term is the sum of all the previous errors. So the integral term of the controller will be the sum of all
+the previous cross track errors multiplied by the I gain.
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+I did not feel that the Integral portion of the controller added a lot of performance gain to the system. It had to
+remain very small or else it would make the system unstable. I was able to get better performance by resetting the
+Integral term whenever the cross track error changed directions
 
-## Project Instructions and Rubric
+### Derivative (D) Gain
+The derivative term is the change in the cross track error multiplied by the D gain.
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+The derivative term for this controller gave stability to the system 
 
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/e8235395-22dd-4b87-88e0-d108c5e5bbf4/concepts/6a4d8d42-6a04-4aa6-b284-1697c0fd6562)
-for instructions and the project rubric.
+## Tuning PID gains
+I started tuning the PID gains by manual trial and error. I also created a twiddle algorithm in my PID controller to
+adjust the gains automatically. My twiddle algorithm ran for a specified duration on the track and took the average
+cross track error over that duration to decide whether the change in parameters was better or worse than the previous
+parameters.
 
-## Hints!
+I found that minimizing the cross track error this way did not necessarily create the best steering performance. For
+Example the car could steer very poorly on a turn but sense this is a small portion of the overall section it would have
+a better average cross track error than parameters where the car smoothly turns with worse cross track error.
 
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
-
-## Call for IDE Profiles Pull Requests
-
-Help your fellow students!
-
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
-
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
-
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+I mainly used manual trial and error to get the tuning parameters I desired. I used twiddle to see if
+improvements could be made, but this took a long time to run and often created tuning parameters that were too high, 
+causing the car to go slightly off the track on tight turns, and to hunt around the center on straight paths.
